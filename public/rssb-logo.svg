@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Outer Circle -->
+  <circle cx="100" cy="100" r="95" fill="none" stroke="#1e3a5f" stroke-width="4"/>
+  <!-- Inner Circle -->
+  <circle cx="100" cy="100" r="80" fill="none" stroke="#1e3a5f" stroke-width="2"/>
+  <!-- Center Star/Flower Pattern -->
+  <circle cx="100" cy="100" r="25" fill="none" stroke="#1e3a5f" stroke-width="2"/>
+  <!-- Petals -->
+  <path d="M100 20 Q110 60 100 75 Q90 60 100 20" fill="#1e3a5f"/>
+  <path d="M100 180 Q110 140 100 125 Q90 140 100 180" fill="#1e3a5f"/>
+  <path d="M20 100 Q60 110 75 100 Q60 90 20 100" fill="#1e3a5f"/>
+  <path d="M180 100 Q140 110 125 100 Q140 90 180 100" fill="#1e3a5f"/>
+  <!-- Diagonal Petals -->
+  <path d="M43 43 Q70 65 80 80 Q65 70 43 43" fill="#1e3a5f"/>
+  <path d="M157 157 Q130 135 120 120 Q135 130 157 157" fill="#1e3a5f"/>
+  <path d="M157 43 Q135 70 120 80 Q130 65 157 43" fill="#1e3a5f"/>
+  <path d="M43 157 Q65 130 80 120 Q70 135 43 157" fill="#1e3a5f"/>
+  <!-- Center dot -->
+  <circle cx="100" cy="100" r="8" fill="#1e3a5f"/>
+  <!-- Text around -->
+  <text x="100" y="196" text-anchor="middle" font-size="10" font-family="serif" font-weight="bold" fill="#1e3a5f">RADHA SOAMI SATSANG BEAS</text>
+</svg>

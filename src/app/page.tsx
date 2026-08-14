@@ -185,7 +185,8 @@ export default function HomePage() {
       <div className="bg-white border-2 border-black font-['Calibri',_sans-serif] text-[11px] print-area" id="printArea">
 
         {/* === TOP HEADER === */}
-        <div className="text-center pt-6 pb-2 px-8">
+        <div className="text-center pt-4 pb-2 px-8">
+          <img src="/rssb-logo.svg" alt="RSSB" className="w-14 h-14 mx-auto mb-1" />
           <p className="text-[12px] font-bold tracking-wide">SATSANG CENTRES IN INDIA</p>
           <p className="text-[14px] font-bold tracking-wide mt-0.5">NOMINAL ROLL SEWA JATHA</p>
           <div className="mt-1">
