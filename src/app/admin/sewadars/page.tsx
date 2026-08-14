@@ -1,701 +1,271 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
-import toast from 'react-hot-toast';
-import { Plus, Search, Edit, Trash2, Upload, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Sewadar } from '@/types/database';
-import Modal from '@/components/Modal';
-import LoadingSpinner from '@/components/LoadingSpinner';
 import * as XLSX from 'xlsx';
 
-const btnPrimary = 'bg-blue-600 text-white px-4 py-2 rounded-md font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
-const btnSecondary = 'bg-gray-200 text-gray-800 px-4 py-2 rounded-md font-medium hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
-const btnSuccess = 'bg-green-600 text-white px-4 py-2 rounded-md font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
-const inputField = 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm';
-
-function SewadarsContent() {
-  const searchParams = useSearchParams();
-  const initialTab = searchParams.get('tab') || 'list';
-
+export default function SewadarsPage() {
   const [sewadars, setSewadars] = useState<Sewadar[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [activeTab, setActiveTab] = useState(initialTab);
-
-  // Modal states
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editingSewadar, setEditingSewadar] = useState<Sewadar | null>(null);
-  const [formData, setFormData] = useState({
-    badge_id: '',
-    srs_id: '',
-    name: '',
-    father_husband_name: '',
-    gender: '',
-    age: '',
-    aadhar_no: '',
-    address: '',
-    mobile_no: '',
-  });
-
-  // Import states
+  const [message, setMessage] = useState('');
+  const [showAdd, setShowAdd] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState<{
-    total: number;
-    inserted: number;
-    updated: number;
-    errors?: string[];
-  } | null>(null);
+
+  // Add form
+  const [addForm, setAddForm] = useState({
+    badge_id: '', sewadar_name: '', father_husband_name: '', gender: 'MALE',
+    age: '', blood_group: '', badge_status: 'OPEN', aadhar_number: '',
+    department: '', address: '', contact_no: '', emergency_contact: '', dob: '',
+  });
 
   const fetchSewadars = useCallback(async () => {
     setLoading(true);
     try {
-      let query = supabase
-        .from('sewadars')
-        .select('*', { count: 'exact' });
-
+      let query = supabase.from('sewadars').select('*').order('sewadar_name');
       if (search) {
-        query = query.or(
-          `badge_id.ilike.%${search}%,srs_id.ilike.%${search}%,name.ilike.%${search}%,mobile_no.ilike.%${search}%`
-        );
+        query = query.or(`badge_id.ilike.%${search}%,sewadar_name.ilike.%${search}%,contact_no.ilike.%${search}%`);
       }
-
-      const limit = 20;
-      const offset = (page - 1) * limit;
-
-      const { data, error, count } = await query
-        .order('name', { ascending: true })
-        .range(offset, offset + limit - 1);
-
+      const { data, error } = await query.limit(100);
       if (error) throw error;
-
       setSewadars(data || []);
-      setTotal(count || 0);
-      setTotalPages(Math.ceil((count || 0) / limit));
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      toast.error(`Error loading sewadars: ${message}`);
+    } catch {
+      setMessage('❌ Error loading sewadars');
     } finally {
       setLoading(false);
     }
-  }, [search, page]);
+  }, [search]);
 
-  useEffect(() => {
-    fetchSewadars();
-  }, [fetchSewadars]);
-
-  const resetForm = () => {
-    setFormData({
-      badge_id: '',
-      srs_id: '',
-      name: '',
-      father_husband_name: '',
-      gender: '',
-      age: '',
-      aadhar_no: '',
-      address: '',
-      mobile_no: '',
-    });
-  };
+  useEffect(() => { fetchSewadars(); }, [fetchSewadars]);
 
   const handleAdd = async () => {
-    if (!formData.badge_id || !formData.name) {
-      toast.error('Badge ID and Name are required');
+    if (!addForm.badge_id || !addForm.sewadar_name) {
+      setMessage('❌ Badge ID and Name are required');
       return;
     }
-
     try {
       const { error } = await supabase.from('sewadars').insert({
-        badge_id: formData.badge_id,
-        srs_id: formData.srs_id || null,
-        name: formData.name,
-        father_husband_name: formData.father_husband_name || null,
-        gender: formData.gender || null,
-        age: formData.age ? parseInt(formData.age) : null,
-        aadhar_no: formData.aadhar_no || null,
-        address: formData.address || null,
-        mobile_no: formData.mobile_no || null,
+        ...addForm,
+        age: addForm.age ? parseInt(addForm.age) : null,
       });
-
-      if (error) {
-        if (error.code === '23505') {
-          toast.error('A sewadar with this Badge ID or SRS ID already exists');
-        } else {
-          throw error;
-        }
-        return;
-      }
-
-      toast.success('Sewadar added successfully!');
-      setShowAddModal(false);
-      resetForm();
-      fetchSewadars();
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      toast.error(`Error adding sewadar: ${message}`);
-    }
-  };
-
-  const handleEdit = async () => {
-    if (!editingSewadar) return;
-
-    try {
-      const { error } = await supabase
-        .from('sewadars')
-        .update({
-          badge_id: formData.badge_id,
-          srs_id: formData.srs_id || null,
-          name: formData.name,
-          father_husband_name: formData.father_husband_name || null,
-          gender: formData.gender || null,
-          age: formData.age ? parseInt(formData.age) : null,
-          aadhar_no: formData.aadhar_no || null,
-          address: formData.address || null,
-          mobile_no: formData.mobile_no || null,
-        })
-        .eq('id', editingSewadar.id);
-
       if (error) throw error;
-
-      toast.success('Sewadar updated successfully!');
-      setShowEditModal(false);
-      setEditingSewadar(null);
-      resetForm();
+      setMessage('✅ Sewadar added!');
+      setShowAdd(false);
+      setAddForm({ badge_id: '', sewadar_name: '', father_husband_name: '', gender: 'MALE', age: '', blood_group: '', badge_status: 'OPEN', aadhar_number: '', department: '', address: '', contact_no: '', emergency_contact: '', dob: '' });
       fetchSewadars();
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      toast.error(`Error updating sewadar: ${message}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error';
+      setMessage(`❌ ${msg}`);
     }
+    setTimeout(() => setMessage(''), 4000);
   };
 
-  const handleDelete = async (sewadar: Sewadar) => {
-    if (!confirm(`Are you sure you want to delete "${sewadar.name}" (Badge: ${sewadar.badge_id})?`)) {
-      return;
-    }
-
+  const handleDelete = async (s: Sewadar) => {
+    if (!confirm(`Delete ${s.sewadar_name} (${s.badge_id})?`)) return;
     try {
-      const { error } = await supabase
-        .from('sewadars')
-        .delete()
-        .eq('id', sewadar.id);
-
+      const { error } = await supabase.from('sewadars').delete().eq('id', s.id);
       if (error) throw error;
-
-      toast.success('Sewadar deleted successfully!');
+      setMessage('✅ Deleted');
       fetchSewadars();
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      toast.error(`Error deleting sewadar: ${message}`);
+    } catch {
+      setMessage('❌ Error deleting');
     }
+    setTimeout(() => setMessage(''), 3000);
   };
 
-  const openEditModal = (sewadar: Sewadar) => {
-    setEditingSewadar(sewadar);
-    setFormData({
-      badge_id: sewadar.badge_id,
-      srs_id: sewadar.srs_id || '',
-      name: sewadar.name,
-      father_husband_name: sewadar.father_husband_name || '',
-      gender: sewadar.gender || '',
-      age: sewadar.age?.toString() || '',
-      aadhar_no: sewadar.aadhar_no || '',
-      address: sewadar.address || '',
-      mobile_no: sewadar.mobile_no || '',
-    });
-    setShowEditModal(true);
-  };
-
+  // BULK IMPORT from Excel (LONI DATA format)
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setImporting(true);
-    setImportResult(null);
 
     try {
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'array' });
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet);
+      const wb = XLSX.read(buffer, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
 
-      if (jsonData.length === 0) {
-        toast.error('Excel file is empty');
-        return;
-      }
-
-      // Column mapping
-      const columnMapping: Record<string, string> = {
-        'badge_id': 'badge_id', 'Badge ID': 'badge_id', 'BADGE ID': 'badge_id', 'Badge Id': 'badge_id',
-        'srs_id': 'srs_id', 'SRS ID': 'srs_id', 'SRS Id': 'srs_id', 'Srs Id': 'srs_id',
-        'name': 'name', 'Name': 'name', 'NAME': 'name', 'Name of Sewadar': 'name', 'Name of Sewadar / Sewadarni': 'name',
-        'father_husband_name': 'father_husband_name', 'Father/Husband Name': 'father_husband_name',
-        "Father's / Husband's Name": 'father_husband_name', "Father's Name": 'father_husband_name', 'Father Name': 'father_husband_name',
-        'gender': 'gender', 'Gender': 'gender', 'M/F': 'gender', 'Sex': 'gender',
-        'age': 'age', 'Age': 'age', 'AGE': 'age',
-        'aadhar_no': 'aadhar_no', 'Aadhar No': 'aadhar_no', 'Aadhar No.': 'aadhar_no', 'Aadhaar': 'aadhar_no', 'Aadhaar No': 'aadhar_no',
-        'address': 'address', 'Address': 'address', 'ADDRESS': 'address', 'R/o Village / Town / Locality / District': 'address', 'Village': 'address',
-        'mobile_no': 'mobile_no', 'Mobile No': 'mobile_no', 'Mobile No.': 'mobile_no', 'Mobile': 'mobile_no', 'Phone': 'mobile_no',
+      const colMap: Record<string, string> = {
+        'Badge_Number': 'badge_id', 'Badge ID': 'badge_id', 'BADGE ID': 'badge_id', 'badge_id': 'badge_id',
+        'Sewadar_Name': 'sewadar_name', 'Name': 'sewadar_name', 'name': 'sewadar_name',
+        'Father_Husband_Name': 'father_husband_name', "Father's / Husband's Name": 'father_husband_name',
+        'DOB': 'dob', 'Gender': 'gender', 'Blood Group': 'blood_group', 'Blood_Group': 'blood_group',
+        'Badge_Status': 'badge_status', 'Badge Status': 'badge_status',
+        'Aadhar Number': 'aadhar_number', 'Aadhar_Number': 'aadhar_number', 'Aadhar No.': 'aadhar_number',
+        'Department': 'department', 'Address': 'address',
+        'Contact_No': 'contact_no', 'Mobile No.': 'contact_no', 'Mobile': 'contact_no',
+        'Emergency_Contact': 'emergency_contact', 'Age': 'age',
       };
 
-      let inserted = 0;
-      let updated = 0;
-      const errors: string[] = [];
+      let inserted = 0, updated = 0;
 
-      for (const row of jsonData) {
-        const mapped: Record<string, string | null> = {};
-        Object.entries(row).forEach(([key, value]) => {
-          const dbField = columnMapping[key.trim()];
-          if (dbField) {
-            mapped[dbField] = value !== undefined && value !== null ? String(value).trim() : null;
+      for (const row of rows) {
+        const mapped: Record<string, string | number | null> = {};
+        Object.entries(row).forEach(([key, val]) => {
+          const field = colMap[key.trim()];
+          if (field && val !== undefined && val !== null) {
+            mapped[field] = String(val).trim();
           }
         });
 
-        if (!mapped.badge_id || !mapped.name) continue;
+        if (!mapped.badge_id || !mapped.sewadar_name) return;
 
-        const sewadar = {
-          badge_id: mapped.badge_id,
-          srs_id: mapped.srs_id || null,
-          name: mapped.name,
-          father_husband_name: mapped.father_husband_name || null,
-          gender: mapped.gender ? mapped.gender.charAt(0).toUpperCase() : null,
-          age: mapped.age ? parseInt(mapped.age) : null,
-          aadhar_no: mapped.aadhar_no ? mapped.aadhar_no.replace(/\D/g, '') : null,
-          address: mapped.address || null,
-          mobile_no: mapped.mobile_no ? mapped.mobile_no.replace(/\D/g, '') : null,
-        };
+        // Parse age
+        if (mapped.age) mapped.age = parseInt(String(mapped.age)) || null;
 
         const { data: existing } = await supabase
-          .from('sewadars')
-          .select('id')
-          .eq('badge_id', sewadar.badge_id)
-          .single();
+          .from('sewadars').select('id').eq('badge_id', mapped.badge_id).single();
 
         if (existing) {
-          const { error } = await supabase
-            .from('sewadars')
-            .update(sewadar)
-            .eq('badge_id', sewadar.badge_id);
-
-          if (error) {
-            errors.push(`Update ${sewadar.badge_id}: ${error.message}`);
-          } else {
-            updated++;
-          }
+          await supabase.from('sewadars').update(mapped).eq('badge_id', mapped.badge_id);
+          updated++;
         } else {
-          const { error } = await supabase
-            .from('sewadars')
-            .insert(sewadar);
-
-          if (error) {
-            errors.push(`Insert ${sewadar.badge_id}: ${error.message}`);
-          } else {
-            inserted++;
-          }
+          await supabase.from('sewadars').insert(mapped);
+          inserted++;
         }
       }
 
-      setImportResult({ total: jsonData.length, inserted, updated, errors: errors.length > 0 ? errors : undefined });
-      toast.success(`Import complete! ${inserted} added, ${updated} updated.`);
+      setMessage(`✅ Import done! ${inserted} added, ${updated} updated`);
       fetchSewadars();
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      toast.error(`Import failed: ${message}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error';
+      setMessage(`❌ Import failed: ${msg}`);
     } finally {
       setImporting(false);
       e.target.value = '';
+      setTimeout(() => setMessage(''), 5000);
     }
   };
 
+  // EXPORT
   const handleExport = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('sewadars')
-        .select('*')
-        .order('name', { ascending: true });
+    const { data } = await supabase.from('sewadars').select('*').order('sewadar_name');
+    if (!data) return;
 
-      if (error) throw error;
+    const exportData = data.map((s, i) => ({
+      'S.No': i + 1,
+      'Badge_Number': s.badge_id,
+      'Sewadar_Name': s.sewadar_name,
+      'Father_Husband_Name': s.father_husband_name || '',
+      'DOB': s.dob || '',
+      'Gender': s.gender || '',
+      'Blood Group': s.blood_group || '',
+      'Badge_Status': s.badge_status || '',
+      'Aadhar Number': s.aadhar_number || '',
+      'Department': s.department || '',
+      'Address': s.address || '',
+      'Contact_No': s.contact_no || '',
+      'Emergency_Contact': s.emergency_contact || '',
+      'Age': s.age || '',
+    }));
 
-      const exportData = (data || []).map(s => ({
-        'Badge ID': s.badge_id,
-        'SRS ID': s.srs_id || '',
-        'Name': s.name,
-        "Father's / Husband's Name": s.father_husband_name || '',
-        'M/F': s.gender || '',
-        'Age': s.age || '',
-        'Aadhar No.': s.aadhar_no || '',
-        'Address': s.address || '',
-        'Mobile No.': s.mobile_no || '',
-      }));
-
-      const ws = XLSX.utils.json_to_sheet(exportData);
-      ws['!cols'] = [
-        { wch: 12 }, { wch: 12 }, { wch: 25 }, { wch: 25 },
-        { wch: 5 }, { wch: 5 }, { wch: 14 }, { wch: 35 }, { wch: 12 },
-      ];
-
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Sewadars');
-      XLSX.writeFile(wb, `Sewadars_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
-
-      toast.success('Export complete!');
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      toast.error(`Export failed: ${message}`);
-    }
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wbb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wbb, ws, 'LONI DATA');
+    XLSX.writeFile(wbb, `LONI_DATA_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  const SewadarForm = ({ onSubmit, submitLabel }: { onSubmit: () => void; submitLabel: string }) => (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Badge ID <span className="text-red-500">*</span></label>
-          <input
-            type="text"
-            value={formData.badge_id}
-            onChange={e => setFormData({ ...formData, badge_id: e.target.value })}
-            className={inputField}
-            placeholder="Badge ID"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">SRS ID</label>
-          <input
-            type="text"
-            value={formData.srs_id}
-            onChange={e => setFormData({ ...formData, srs_id: e.target.value })}
-            className={inputField}
-            placeholder="SRS ID"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Name <span className="text-red-500">*</span></label>
-          <input
-            type="text"
-            value={formData.name}
-            onChange={e => setFormData({ ...formData, name: e.target.value })}
-            className={inputField}
-            placeholder="Full Name"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Father&apos;s / Husband&apos;s Name</label>
-          <input
-            type="text"
-            value={formData.father_husband_name}
-            onChange={e => setFormData({ ...formData, father_husband_name: e.target.value })}
-            className={inputField}
-            placeholder="Father/Husband Name"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
-          <select
-            value={formData.gender}
-            onChange={e => setFormData({ ...formData, gender: e.target.value })}
-            className={inputField}
-          >
-            <option value="">Select</option>
-            <option value="M">Male</option>
-            <option value="F">Female</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Age</label>
-          <input
-            type="number"
-            value={formData.age}
-            onChange={e => setFormData({ ...formData, age: e.target.value })}
-            className={inputField}
-            placeholder="Age"
-            min="1"
-            max="150"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Aadhaar Number</label>
-          <input
-            type="text"
-            value={formData.aadhar_no}
-            onChange={e => setFormData({ ...formData, aadhar_no: e.target.value })}
-            className={inputField}
-            placeholder="12-digit Aadhaar"
-            maxLength={12}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Number</label>
-          <input
-            type="text"
-            value={formData.mobile_no}
-            onChange={e => setFormData({ ...formData, mobile_no: e.target.value })}
-            className={inputField}
-            placeholder="10-digit mobile"
-            maxLength={10}
-          />
-        </div>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-        <textarea
-          value={formData.address}
-          onChange={e => setFormData({ ...formData, address: e.target.value })}
-          className={inputField}
-          rows={2}
-          placeholder="Village / Town / Locality / District"
-        />
-      </div>
-      <div className="flex justify-end gap-2 pt-4">
-        <button
-          onClick={() => { setShowAddModal(false); setShowEditModal(false); resetForm(); }}
-          className={btnSecondary}
-        >
-          Cancel
-        </button>
-        <button onClick={onSubmit} className={btnPrimary}>
-          {submitLabel}
-        </button>
-      </div>
-    </div>
-  );
-
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Sewadar Management</h1>
-          <p className="text-gray-600">Total: {total} sewadars</p>
-        </div>
-        <div className="flex gap-2 mt-4 sm:mt-0">
-          <button onClick={() => { resetForm(); setShowAddModal(true); }} className={`${btnPrimary} flex items-center gap-1`}>
-            <Plus size={16} /> Add Sewadar
+    <div className="max-w-7xl mx-auto p-4">
+      {message && <div className="fixed top-16 right-4 z-50 bg-white border shadow-lg rounded px-4 py-3 text-sm font-medium">{message}</div>}
+
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+        <h1 className="text-xl font-bold">Sewadar Database (LONI DATA)</h1>
+        <div className="flex gap-2">
+          <button onClick={() => setShowAdd(!showAdd)} className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium">
+            ➕ Add Sewadar
           </button>
-          <button onClick={handleExport} className={`${btnSuccess} flex items-center gap-1`}>
-            <Download size={16} /> Export
+          <button onClick={handleExport} className="bg-green-600 text-white px-3 py-1.5 rounded text-sm font-medium">
+            📥 Export Excel
           </button>
+          <label className="bg-yellow-600 text-white px-3 py-1.5 rounded text-sm font-medium cursor-pointer">
+            📤 {importing ? 'Importing...' : 'Import Excel'}
+            <input type="file" accept=".xlsx,.xls,.csv" onChange={handleImport} className="hidden" disabled={importing} />
+          </label>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b mb-6">
-        <button
-          onClick={() => setActiveTab('list')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 ${activeTab === 'list' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-        >
-          Sewadar List
-        </button>
-        <button
-          onClick={() => setActiveTab('import')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 ${activeTab === 'import' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-        >
-          Bulk Import
-        </button>
-        <button
-          onClick={() => setActiveTab('export')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 ${activeTab === 'export' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-        >
-          Bulk Export
-        </button>
-      </div>
+      {/* Search */}
+      <input
+        type="text" value={search} onChange={e => setSearch(e.target.value)}
+        className="w-full border rounded px-3 py-2 mb-4 text-sm" placeholder="🔍 Search by Badge ID, Name, or Mobile..."
+      />
 
-      {activeTab === 'list' && (
-        <>
-          {/* Search */}
-          <div className="mb-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <input
-                type="text"
-                value={search}
-                onChange={e => { setSearch(e.target.value); setPage(1); }}
-                className={`${inputField} pl-10`}
-                placeholder="Search by Badge ID, SRS ID, name, or mobile..."
-              />
-            </div>
+      {/* Add Form */}
+      {showAdd && (
+        <div className="bg-blue-50 border rounded p-4 mb-4">
+          <h3 className="font-bold mb-3">Add New Sewadar</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <input placeholder="Badge ID *" value={addForm.badge_id} onChange={e => setAddForm({...addForm, badge_id: e.target.value})} className="border rounded px-2 py-1.5" />
+            <input placeholder="Name *" value={addForm.sewadar_name} onChange={e => setAddForm({...addForm, sewadar_name: e.target.value})} className="border rounded px-2 py-1.5" />
+            <input placeholder="Father/Husband Name" value={addForm.father_husband_name} onChange={e => setAddForm({...addForm, father_husband_name: e.target.value})} className="border rounded px-2 py-1.5" />
+            <select value={addForm.gender} onChange={e => setAddForm({...addForm, gender: e.target.value})} className="border rounded px-2 py-1.5">
+              <option value="MALE">MALE</option><option value="FEMALE">FEMALE</option>
+            </select>
+            <input placeholder="Age" value={addForm.age} onChange={e => setAddForm({...addForm, age: e.target.value})} className="border rounded px-2 py-1.5" type="number" />
+            <input placeholder="Blood Group" value={addForm.blood_group} onChange={e => setAddForm({...addForm, blood_group: e.target.value})} className="border rounded px-2 py-1.5" />
+            <input placeholder="Aadhar No." value={addForm.aadhar_number} onChange={e => setAddForm({...addForm, aadhar_number: e.target.value})} className="border rounded px-2 py-1.5" />
+            <input placeholder="Department" value={addForm.department} onChange={e => setAddForm({...addForm, department: e.target.value})} className="border rounded px-2 py-1.5" />
+            <input placeholder="Contact No." value={addForm.contact_no} onChange={e => setAddForm({...addForm, contact_no: e.target.value})} className="border rounded px-2 py-1.5" />
+            <input placeholder="Emergency Contact" value={addForm.emergency_contact} onChange={e => setAddForm({...addForm, emergency_contact: e.target.value})} className="border rounded px-2 py-1.5" />
+            <input placeholder="Address" value={addForm.address} onChange={e => setAddForm({...addForm, address: e.target.value})} className="border rounded px-2 py-1.5 col-span-2" />
           </div>
-
-          {/* Table */}
-          {loading ? (
-            <LoadingSpinner text="Loading sewadars..." />
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse border border-gray-300 text-sm">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      <th className="border border-gray-300 px-3 py-2 text-left">Badge ID</th>
-                      <th className="border border-gray-300 px-3 py-2 text-left">SRS ID</th>
-                      <th className="border border-gray-300 px-3 py-2 text-left">Name</th>
-                      <th className="border border-gray-300 px-3 py-2 text-left hidden md:table-cell">Father/Husband</th>
-                      <th className="border border-gray-300 px-3 py-2 text-center hidden sm:table-cell">M/F</th>
-                      <th className="border border-gray-300 px-3 py-2 text-center hidden sm:table-cell">Age</th>
-                      <th className="border border-gray-300 px-3 py-2 text-left hidden lg:table-cell">Mobile</th>
-                      <th className="border border-gray-300 px-3 py-2 text-center">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sewadars.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="border border-gray-300 px-3 py-8 text-center text-gray-500">
-                          No sewadars found. {search ? 'Try a different search.' : 'Add your first sewadar.'}
-                        </td>
-                      </tr>
-                    ) : (
-                      sewadars.map(sewadar => (
-                        <tr key={sewadar.id} className="hover:bg-gray-50">
-                          <td className="border border-gray-300 px-3 py-2 font-mono">{sewadar.badge_id}</td>
-                          <td className="border border-gray-300 px-3 py-2 font-mono">{sewadar.srs_id || '-'}</td>
-                          <td className="border border-gray-300 px-3 py-2 font-medium">{sewadar.name}</td>
-                          <td className="border border-gray-300 px-3 py-2 hidden md:table-cell">{sewadar.father_husband_name || '-'}</td>
-                          <td className="border border-gray-300 px-3 py-2 text-center hidden sm:table-cell">{sewadar.gender || '-'}</td>
-                          <td className="border border-gray-300 px-3 py-2 text-center hidden sm:table-cell">{sewadar.age || '-'}</td>
-                          <td className="border border-gray-300 px-3 py-2 hidden lg:table-cell">{sewadar.mobile_no || '-'}</td>
-                          <td className="border border-gray-300 px-3 py-2 text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              <button
-                                onClick={() => openEditModal(sewadar)}
-                                className="p-1 text-blue-600 hover:text-blue-800"
-                                title="Edit"
-                              >
-                                <Edit size={16} />
-                              </button>
-                              <button
-                                onClick={() => handleDelete(sewadar)}
-                                className="p-1 text-red-600 hover:text-red-800"
-                                title="Delete"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <span className="text-sm text-gray-600">
-                    Page {page} of {totalPages} ({total} records)
-                  </span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setPage(p => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                      className={`${btnSecondary} flex items-center gap-1 text-sm`}
-                    >
-                      <ChevronLeft size={16} /> Previous
-                    </button>
-                    <button
-                      onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                      disabled={page === totalPages}
-                      className={`${btnSecondary} flex items-center gap-1 text-sm`}
-                    >
-                      Next <ChevronRight size={16} />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </>
-      )}
-
-      {activeTab === 'import' && (
-        <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold mb-4">Bulk Import Sewadars from Excel</h3>
-          <div className="space-y-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-              <h4 className="font-medium text-blue-800 mb-2">Expected Excel Columns:</h4>
-              <p className="text-sm text-blue-700">
-                Badge ID (required), SRS ID, Name (required), Father/Husband Name, M/F, Age, Aadhar No., Address, Mobile No.
-              </p>
-              <p className="text-xs text-blue-600 mt-2">
-                The system will try to match common column name variations automatically.
-                Existing records (by Badge ID) will be updated; new records will be created.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <label className={`${btnPrimary} flex items-center gap-2 cursor-pointer`}>
-                <Upload size={16} />
-                {importing ? 'Importing...' : 'Choose Excel File'}
-                <input
-                  type="file"
-                  accept=".xlsx,.xls,.csv"
-                  onChange={handleImport}
-                  disabled={importing}
-                  className="hidden"
-                />
-              </label>
-              {importing && <LoadingSpinner size="sm" text="Processing..." />}
-            </div>
-
-            {importResult && (
-              <div className="bg-green-50 border border-green-200 rounded-md p-4">
-                <h4 className="font-medium text-green-800 mb-2">Import Results:</h4>
-                <ul className="text-sm text-green-700 space-y-1">
-                  <li>Total records processed: {importResult.total}</li>
-                  <li>New records inserted: {importResult.inserted}</li>
-                  <li>Existing records updated: {importResult.updated}</li>
-                </ul>
-                {importResult.errors && importResult.errors.length > 0 && (
-                  <div className="mt-2">
-                    <p className="text-sm font-medium text-red-700">Errors:</p>
-                    <ul className="text-xs text-red-600 space-y-0.5">
-                      {importResult.errors.map((err, i) => (
-                        <li key={i}>• {err}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
+          <div className="mt-3 flex gap-2">
+            <button onClick={handleAdd} className="bg-blue-600 text-white px-4 py-1.5 rounded text-sm">Save</button>
+            <button onClick={() => setShowAdd(false)} className="bg-gray-400 text-white px-4 py-1.5 rounded text-sm">Cancel</button>
           </div>
         </div>
       )}
 
-      {activeTab === 'export' && (
-        <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold mb-4">Bulk Export Sewadars to Excel</h3>
-          <div className="space-y-4">
-            <p className="text-gray-600">
-              Export all sewadar records to a formatted Excel file. The file will include:
-              Badge ID, SRS ID, Name, Father/Husband Name, Gender, Age, Aadhaar No., Address, Mobile No.
-            </p>
-            <button onClick={handleExport} className={`${btnSuccess} flex items-center gap-2`}>
-              <Download size={16} /> Download Excel Export
-            </button>
-          </div>
+      {/* Table */}
+      {loading ? (
+        <p className="text-center py-8 text-gray-500">Loading...</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-xs">
+            <thead>
+              <tr className="bg-gray-200">
+                <th className="border px-2 py-1.5">S.No</th>
+                <th className="border px-2 py-1.5">Badge ID</th>
+                <th className="border px-2 py-1.5">Name</th>
+                <th className="border px-2 py-1.5">Father/Husband</th>
+                <th className="border px-2 py-1.5">Gender</th>
+                <th className="border px-2 py-1.5">Age</th>
+                <th className="border px-2 py-1.5">Department</th>
+                <th className="border px-2 py-1.5">Mobile</th>
+                <th className="border px-2 py-1.5">Status</th>
+                <th className="border px-2 py-1.5">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sewadars.length === 0 ? (
+                <tr><td colSpan={10} className="border px-2 py-6 text-center text-gray-500">No sewadars found. Import your LONI DATA Excel.</td></tr>
+              ) : sewadars.map((s, i) => (
+                <tr key={s.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                  <td className="border px-2 py-1 text-center">{i + 1}</td>
+                  <td className="border px-2 py-1 font-mono text-blue-700">{s.badge_id}</td>
+                  <td className="border px-2 py-1 font-medium">{s.sewadar_name}</td>
+                  <td className="border px-2 py-1">{s.father_husband_name}</td>
+                  <td className="border px-2 py-1 text-center">{s.gender}</td>
+                  <td className="border px-2 py-1 text-center">{s.age}</td>
+                  <td className="border px-2 py-1">{s.department}</td>
+                  <td className="border px-2 py-1 font-mono">{s.contact_no}</td>
+                  <td className="border px-2 py-1 text-center">
+                    <span className={`text-[10px] px-1 rounded ${s.badge_status === 'PERMANENT' ? 'bg-green-100 text-green-700' : s.badge_status === 'CANCELLED' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                      {s.badge_status}
+                    </span>
+                  </td>
+                  <td className="border px-2 py-1 text-center">
+                    <button onClick={() => handleDelete(s)} className="text-red-500 hover:text-red-700 text-xs">🗑️</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-xs text-gray-500 mt-2">Showing {sewadars.length} records</p>
         </div>
       )}
-
-      {/* Add Modal */}
-      <Modal isOpen={showAddModal} onClose={() => { setShowAddModal(false); resetForm(); }} title="Add New Sewadar" size="lg">
-        <SewadarForm onSubmit={handleAdd} submitLabel="Add Sewadar" />
-      </Modal>
-
-      {/* Edit Modal */}
-      <Modal isOpen={showEditModal} onClose={() => { setShowEditModal(false); setEditingSewadar(null); resetForm(); }} title="Edit Sewadar" size="lg">
-        <SewadarForm onSubmit={handleEdit} submitLabel="Update Sewadar" />
-      </Modal>
     </div>
-  );
-}
-
-
-export default function SewadarsPage() {
-  return (
-    <Suspense fallback={<LoadingSpinner text="Loading..." />}>
-      <SewadarsContent />
-    </Suspense>
   );
 }

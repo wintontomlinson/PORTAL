@@ -1,182 +1,103 @@
 import * as XLSX from 'xlsx';
-import { VehicleFormData } from '@/types/database';
+import { VehicleFormState } from '@/types/database';
 
-export function generateExcel(formData: VehicleFormData) {
+export function generateExcel(form: VehicleFormState) {
   const wb = XLSX.utils.book_new();
+  const data: (string | number | null)[][] = [];
 
-  // Build the worksheet data matching the original Excel format
-  const wsData: (string | number | null)[][] = [];
+  // Row 1-3: Headers (matching MASTERFILE exactly)
+  data.push(['', '', 'SATSANG CENTRES IN INDIA', '', '', '', '', '', '']);
+  data.push(['', '', 'NOMINAL ROLL SEWA JATHA', '', '', '', '', '', '']);
+  data.push(['', '', form.srs_id || '', '', '', '', '', '', '']);
+  data.push([]); // empty row
 
-  // Row 1: Main Title (merged)
-  wsData.push(['RADHA SOAMI SATSANG BEAS - LONI CENTRE', null, null, null, null, null, null, null, null, null]);
+  // Row 5: Satsang Place & Area
+  data.push(['', '', `Name of Satsang Place:`, '', form.satsang_place, '', '', `Area :  ${form.area}`, '']);
 
-  // Row 2: Sub Title (merged)
-  wsData.push(['BHATI JATHA - VEHICLE ENTRY FORM', null, null, null, null, null, null, null, null, null]);
+  // Row 6: Jathedar & Driver
+  data.push(['', '', `Name of Jathedar:`, '', form.jathedar_name, '', '', `Name of Driver: ${form.driver_name}`, '']);
 
-  // Row 3: Empty
-  wsData.push([]);
+  // Row 7: Vehicle Type & No
+  data.push(['', '', `Type of Vehicle:`, '', form.vehicle_type, '', '', `Vehicle No.: ${form.vehicle_no}`, '']);
 
-  // Row 4: Header fields row 1
-  wsData.push([
-    'Name of Jathedar:', formData.jathedar_name || '', null,
-    'Type of Vehicle:', formData.vehicle_type || '', null,
-    'Place of Sewa:', formData.place_of_sewa || '', null, null
-  ]);
+  // Row 8: Place of Sewa & Dates
+  data.push(['', '', `Place of Sewa:`, '', form.place_of_sewa, '', '', `FROM :  ${form.from_date}     TO :  ${form.to_date}`, '']);
 
-  // Row 5: Header fields row 2
-  wsData.push([
-    'Name of Driver:', formData.driver_name || '', null,
-    'Vehicle Number:', formData.vehicle_number || '', null,
-    'From Date:', formData.from_date || '',
-    'To Date:', formData.to_date || ''
-  ]);
+  // Row 9: Bhati type
+  data.push(['', '', `(Mention Beas Department or Centre As applicable) :`, '', '', '', '', `${form.bhati_type}`, '']);
 
-  // Row 6: Empty
-  wsData.push([]);
+  data.push([]); // empty
 
-  // Row 7: Table Header
-  wsData.push([
-    'Sr. No.',
-    'Badge ID',
-    'SRS ID',
+  // Row 11: Table Header
+  data.push([
+    '', 'SR. No.',
     'Name of Sewadar / Sewadarni',
     "Father's / Husband's Name",
-    'M/F',
+    'M / F',
     'Age',
     'Aadhar No.',
     'R/o Village / Town / Locality / District',
-    'Mobile No.'
+    'Mobile No.',
+    'BADGE ID',
   ]);
 
   // Data rows
-  const members = formData.members.filter(m => m.name.trim());
-  members.forEach((member, index) => {
-    wsData.push([
-      index + 1,
-      member.badge_id || '',
-      member.srs_id || '',
-      member.name || '',
-      member.father_husband_name || '',
-      member.gender || '',
-      member.age ? parseInt(member.age) : '',
-      member.aadhar_no || '',
-      member.address || '',
-      member.mobile_no || ''
+  const members = form.members.filter(m => m.sewadar_name.trim());
+  members.forEach((m, i) => {
+    data.push([
+      '',
+      i + 1,
+      m.sewadar_name,
+      m.father_husband_name,
+      m.gender,
+      m.age ? parseInt(m.age) : '',
+      m.aadhar_number,
+      m.address,
+      m.mobile_no,
+      m.badge_id,
     ]);
   });
 
-  // Add empty rows to make minimum 20 rows in table
-  const minRows = 20;
-  for (let i = members.length; i < minRows; i++) {
-    wsData.push([i + 1, '', '', '', '', '', '', '', '', '']);
+  // Add empty rows to make it look like the original (min 5 rows)
+  for (let i = members.length; i < 5; i++) {
+    data.push(['', i + 1, '', '', '', '', '', '', '', '']);
   }
 
-  // Footer row
-  wsData.push([]);
-  wsData.push([`Total Sewadars: ${members.length}`, null, null, null, null, null, null, null, `Generated: ${new Date().toLocaleDateString('en-IN')}`, null]);
+  data.push([]); // empty
+  data.push([]); // empty
 
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  // Signature section
+  data.push(['', '', '(Signature of Jathedar)', '', '', '', '', '', '(Signature of Functionary)']);
+  data.push(['', '', '', '', '', '', '', '', '(Affix Rubber Stamp)']);
+  data.push([]); // empty
+  data.push(['', '', `Date:            ${form.from_date}           `, '', '', '', '', '', `Date:            ${form.from_date}           `]);
+  data.push(['', '', `Contact No.:         `, '', '', '', '', '', `Contact No.:        `]);
 
-  // Column widths (matching original Excel format)
+  const ws = XLSX.utils.aoa_to_sheet(data);
+
+  // Column widths matching original
   ws['!cols'] = [
-    { wch: 6 },   // Sr. No.
-    { wch: 12 },  // Badge ID
-    { wch: 12 },  // SRS ID
-    { wch: 25 },  // Name
-    { wch: 25 },  // Father/Husband Name
-    { wch: 5 },   // M/F
-    { wch: 5 },   // Age
-    { wch: 14 },  // Aadhar No.
-    { wch: 35 },  // Address
-    { wch: 12 },  // Mobile No.
+    { wch: 3 },   // A (empty)
+    { wch: 7 },   // B - SR No
+    { wch: 28 },  // C - Name
+    { wch: 24 },  // D - Father/Husband
+    { wch: 7 },   // E - M/F
+    { wch: 5 },   // F - Age
+    { wch: 15 },  // G - Aadhar
+    { wch: 40 },  // H - Address
+    { wch: 13 },  // I - Mobile
+    { wch: 16 },  // J - Badge ID
   ];
 
-  // Row heights
-  ws['!rows'] = [
-    { hpt: 25 },  // Title row
-    { hpt: 20 },  // Sub title
-    { hpt: 12 },  // Empty
-    { hpt: 18 },  // Header row 1
-    { hpt: 18 },  // Header row 2
-    { hpt: 12 },  // Empty
-    { hpt: 20 },  // Table header
-  ];
-
-  // Merge cells for title
+  // Merge cells for headers
   ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 9 } },  // Title merge
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 9 } },  // Sub title merge
-    // Header field merges
-    { s: { r: 3, c: 1 }, e: { r: 3, c: 2 } },  // Jathedar value
-    { s: { r: 3, c: 4 }, e: { r: 3, c: 5 } },  // Vehicle type value
-    { s: { r: 3, c: 7 }, e: { r: 3, c: 9 } },  // Place value
-    { s: { r: 4, c: 1 }, e: { r: 4, c: 2 } },  // Driver value
-    { s: { r: 4, c: 4 }, e: { r: 4, c: 5 } },  // Vehicle number value
+    { s: { r: 0, c: 2 }, e: { r: 0, c: 8 } }, // Title row 1
+    { s: { r: 1, c: 2 }, e: { r: 1, c: 8 } }, // Title row 2
+    { s: { r: 2, c: 2 }, e: { r: 2, c: 8 } }, // SRS ID
   ];
 
-  // Apply styles/formatting
-  // Set cell styles for header
-  const headerStyle = {
-    font: { bold: true, sz: 14 },
-    alignment: { horizontal: 'center', vertical: 'center' },
-  };
+  XLSX.utils.book_append_sheet(wb, ws, 'Nominal Roll');
 
-  const subHeaderStyle = {
-    font: { bold: true, sz: 11 },
-    alignment: { horizontal: 'center', vertical: 'center' },
-  };
-
-  const tableHeaderStyle = {
-    font: { bold: true, sz: 9 },
-    alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
-    fill: { fgColor: { rgb: 'DCE6FA' } },
-    border: {
-      top: { style: 'thin' },
-      bottom: { style: 'thin' },
-      left: { style: 'thin' },
-      right: { style: 'thin' },
-    },
-  };
-
-  const cellBorder = {
-    border: {
-      top: { style: 'thin' },
-      bottom: { style: 'thin' },
-      left: { style: 'thin' },
-      right: { style: 'thin' },
-    },
-  };
-
-  // Apply styles to title cells
-  if (ws['A1']) ws['A1'].s = headerStyle;
-  if (ws['A2']) ws['A2'].s = subHeaderStyle;
-
-  // Apply styles to table header row (row index 6, which is row 7 in 1-based)
-  const headerCols = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
-  headerCols.forEach(col => {
-    const cellRef = `${col}7`;
-    if (ws[cellRef]) {
-      ws[cellRef].s = tableHeaderStyle;
-    }
-  });
-
-  // Apply borders to data cells
-  const totalDataRows = Math.max(members.length, minRows);
-  for (let r = 7; r < 7 + totalDataRows; r++) {
-    headerCols.forEach(col => {
-      const cellRef = `${col}${r + 1}`;
-      if (ws[cellRef]) {
-        ws[cellRef].s = { ...cellBorder, alignment: { vertical: 'center' } };
-      }
-    });
-  }
-
-  // Add worksheet to workbook
-  XLSX.utils.book_append_sheet(wb, ws, 'Bhati Jatha');
-
-  // Generate filename
-  const fileName = `Bhati_Jatha_${formData.vehicle_number || 'Form'}_${formData.from_date || 'date'}.xlsx`;
-
-  // Write file
+  const fileName = `Nominal_Roll_${form.place_of_sewa || 'Sewa'}_${form.from_date || ''}.xlsx`;
   XLSX.writeFile(wb, fileName);
 }

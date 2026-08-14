@@ -1,8 +1,7 @@
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
-import { VehicleFormData } from '@/types/database';
+import { VehicleFormState } from '@/types/database';
 
-// Extend jsPDF type for autotable
 declare module 'jspdf' {
   interface jsPDF {
     autoTable: (options: Record<string, unknown>) => jsPDF;
@@ -10,152 +9,106 @@ declare module 'jspdf' {
   }
 }
 
-export function generatePDF(formData: VehicleFormData) {
-  const doc = new jsPDF({
-    orientation: 'landscape',
-    unit: 'mm',
-    format: 'a4',
-  });
+export function generatePDF(form: VehicleFormState) {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const m = 10; // margin
 
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 10;
-
-  // Title Section
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text('RADHA SOAMI SATSANG BEAS - LONI CENTRE', pageWidth / 2, 15, { align: 'center' });
-
+  // === HEADER ===
   doc.setFontSize(11);
-  doc.text('BHATI JATHA - VEHICLE ENTRY FORM', pageWidth / 2, 22, { align: 'center' });
-
-  // Horizontal line
-  doc.setLineWidth(0.5);
-  doc.line(margin, 25, pageWidth - margin, 25);
-
-  // Header Fields
+  doc.setFont('helvetica', 'bold');
+  doc.text('SATSANG CENTRES IN INDIA', pageW / 2, 12, { align: 'center' });
+  doc.setFontSize(13);
+  doc.text('NOMINAL ROLL SEWA JATHA', pageW / 2, 18, { align: 'center' });
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  const headerY = 30;
-  const colWidth = (pageWidth - 2 * margin) / 3;
+  doc.text(form.srs_id || '', pageW / 2, 23, { align: 'center' });
 
-  // Row 1
-  doc.setFont('helvetica', 'bold');
-  doc.text('Name of Jathedar:', margin, headerY);
-  doc.setFont('helvetica', 'normal');
-  doc.text(formData.jathedar_name || '', margin + 35, headerY);
+  // === FORM FIELDS ===
+  const y0 = 28;
+  doc.setFontSize(9);
 
-  doc.setFont('helvetica', 'bold');
-  doc.text('Type of Vehicle:', margin + colWidth, headerY);
-  doc.setFont('helvetica', 'normal');
-  doc.text(formData.vehicle_type || '', margin + colWidth + 32, headerY);
+  const field = (label: string, value: string, x: number, y: number) => {
+    doc.setFont('helvetica', 'bold');
+    doc.text(label, x, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(value, x + doc.getTextWidth(label) + 2, y);
+  };
 
-  doc.setFont('helvetica', 'bold');
-  doc.text('Place of Sewa:', margin + colWidth * 2, headerY);
-  doc.setFont('helvetica', 'normal');
-  doc.text(formData.place_of_sewa || '', margin + colWidth * 2 + 30, headerY);
+  field('Name of Satsang Place:', form.satsang_place, m, y0);
+  field('Area:', form.area, 160, y0);
 
-  // Row 2
-  const headerY2 = headerY + 7;
-  doc.setFont('helvetica', 'bold');
-  doc.text('Name of Driver:', margin, headerY2);
-  doc.setFont('helvetica', 'normal');
-  doc.text(formData.driver_name || '', margin + 30, headerY2);
+  field('Name of Jathedar:', form.jathedar_name, m, y0 + 5);
+  field('Name of Driver:', form.driver_name, 160, y0 + 5);
 
-  doc.setFont('helvetica', 'bold');
-  doc.text('Vehicle Number:', margin + colWidth, headerY2);
-  doc.setFont('helvetica', 'normal');
-  doc.text(formData.vehicle_number || '', margin + colWidth + 32, headerY2);
+  field('Type of Vehicle:', form.vehicle_type, m, y0 + 10);
+  field('Vehicle No.:', form.vehicle_no, 160, y0 + 10);
 
-  doc.setFont('helvetica', 'bold');
-  doc.text('From:', margin + colWidth * 2, headerY2);
-  doc.setFont('helvetica', 'normal');
-  doc.text(formData.from_date || '', margin + colWidth * 2 + 12, headerY2);
+  field('Place of Sewa:', form.place_of_sewa, m, y0 + 15);
+  field('BHATI:', form.bhati_type, 160, y0 + 15);
 
-  doc.setFont('helvetica', 'bold');
-  doc.text('To:', margin + colWidth * 2 + 40, headerY2);
-  doc.setFont('helvetica', 'normal');
-  doc.text(formData.to_date || '', margin + colWidth * 2 + 48, headerY2);
+  field('FROM:', form.from_date, m, y0 + 20);
+  field('TO:', form.to_date, 80, y0 + 20);
 
-  // Line separator
+  doc.setFontSize(7);
+  doc.text('(Mention Beas Department or Centre As applicable)', m, y0 + 24);
+
+  // Line
   doc.setLineWidth(0.3);
-  doc.line(margin, headerY2 + 3, pageWidth - margin, headerY2 + 3);
+  doc.line(m, y0 + 26, pageW - m, y0 + 26);
 
-  // Table
-  const tableColumns = [
-    { header: 'Sr.\nNo.', dataKey: 'sr_no' },
-    { header: 'Badge\nID', dataKey: 'badge_id' },
-    { header: 'SRS\nID', dataKey: 'srs_id' },
-    { header: 'Name of Sewadar /\nSewadarni', dataKey: 'name' },
-    { header: "Father's / Husband's\nName", dataKey: 'father_husband_name' },
-    { header: 'M/F', dataKey: 'gender' },
-    { header: 'Age', dataKey: 'age' },
-    { header: 'Aadhar No.', dataKey: 'aadhar_no' },
-    { header: 'R/o Village / Town /\nLocality / District', dataKey: 'address' },
-    { header: 'Mobile No.', dataKey: 'mobile_no' },
-  ];
+  // === TABLE ===
+  const members = form.members.filter(m => m.sewadar_name.trim());
 
-  const tableRows = formData.members
-    .filter(m => m.name.trim())
-    .map((m, i) => ({
-      sr_no: (i + 1).toString(),
-      badge_id: m.badge_id || '',
-      srs_id: m.srs_id || '',
-      name: m.name || '',
-      father_husband_name: m.father_husband_name || '',
-      gender: m.gender || '',
-      age: m.age || '',
-      aadhar_no: m.aadhar_no || '',
-      address: m.address || '',
-      mobile_no: m.mobile_no || '',
-    }));
+  const tableHead = [['SR. No.', 'Name of Sewadar / Sewadarni', "Father's / Husband's Name", 'M / F', 'Age', 'Aadhar No.', 'R/o Village / Town / Locality / District', 'Mobile No.', 'BADGE ID']];
+
+  const tableBody = members.map((m, i) => [
+    (i + 1).toString(),
+    m.sewadar_name,
+    m.father_husband_name,
+    m.gender,
+    m.age,
+    m.aadhar_number,
+    m.address,
+    m.mobile_no,
+    m.badge_id,
+  ]);
 
   doc.autoTable({
-    startY: headerY2 + 6,
-    head: [tableColumns.map(c => c.header)],
-    body: tableRows.map(row => tableColumns.map(c => row[c.dataKey as keyof typeof row])),
-    margin: { left: margin, right: margin },
-    styles: {
-      fontSize: 7,
-      cellPadding: 1.5,
-      lineColor: [0, 0, 0],
-      lineWidth: 0.2,
-      textColor: [0, 0, 0],
-      valign: 'middle',
-    },
-    headStyles: {
-      fillColor: [220, 230, 250],
-      textColor: [0, 0, 0],
-      fontStyle: 'bold',
-      halign: 'center',
-      fontSize: 7,
-      cellPadding: 2,
-    },
+    startY: y0 + 28,
+    head: tableHead,
+    body: tableBody,
+    margin: { left: m, right: m },
+    styles: { fontSize: 7, cellPadding: 1.5, lineColor: [0, 0, 0], lineWidth: 0.2, textColor: [0, 0, 0] },
+    headStyles: { fillColor: [230, 230, 230], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
     columnStyles: {
-      0: { cellWidth: 10, halign: 'center' },
-      1: { cellWidth: 20, halign: 'center' },
-      2: { cellWidth: 20, halign: 'center' },
-      3: { cellWidth: 40 },
-      4: { cellWidth: 40 },
-      5: { cellWidth: 10, halign: 'center' },
-      6: { cellWidth: 10, halign: 'center' },
-      7: { cellWidth: 28, halign: 'center' },
-      8: { cellWidth: 55 },
-      9: { cellWidth: 25, halign: 'center' },
-    },
-    alternateRowStyles: {
-      fillColor: [248, 248, 248],
+      0: { cellWidth: 12, halign: 'center' },
+      1: { cellWidth: 40 },
+      2: { cellWidth: 40 },
+      3: { cellWidth: 12, halign: 'center' },
+      4: { cellWidth: 10, halign: 'center' },
+      5: { cellWidth: 28 },
+      6: { cellWidth: 60 },
+      7: { cellWidth: 25 },
+      8: { cellWidth: 30 },
     },
     theme: 'grid',
   });
 
-  // Footer
-  const finalY = doc.lastAutoTable.finalY + 10;
+  // === FOOTER - Signatures ===
+  const finalY = doc.lastAutoTable.finalY + 15;
   doc.setFontSize(8);
-  doc.setFont('helvetica', 'italic');
-  doc.text(`Total Sewadars: ${tableRows.length}`, margin, finalY);
-  doc.text(`Generated on: ${new Date().toLocaleDateString('en-IN')}`, pageWidth - margin - 50, finalY);
+
+  doc.text('(Signature of Jathedar)', m + 30, finalY);
+  doc.text('(Signature of Functionary)', pageW - m - 60, finalY);
+  doc.text('(Affix Rubber Stamp)', pageW - m - 55, finalY + 4);
+
+  doc.text(`Date: ${form.from_date || '___________'}`, m, finalY + 12);
+  doc.text(`Contact No.: _______________`, m, finalY + 16);
+  doc.text(`Date: ${form.from_date || '___________'}`, pageW - m - 60, finalY + 12);
+  doc.text(`Contact No.: _______________`, pageW - m - 60, finalY + 16);
 
   // Save
-  const fileName = `Bhati_Jatha_${formData.vehicle_number || 'Form'}_${formData.from_date || 'date'}.pdf`;
+  const fileName = `Nominal_Roll_${form.place_of_sewa || 'Sewa'}_${form.from_date || ''}.pdf`;
   doc.save(fileName);
 }
